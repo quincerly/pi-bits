@@ -1,0 +1,278 @@
+#! /usr/bin/env python
+
+import os
+import sys
+import papirus
+
+import math
+import cairo
+import pangocairo
+import pango
+
+import datetime
+import time
+
+import RPi.GPIO as GPIO
+
+import tweepy #https://github.com/tweepy/tweepy
+
+SW5 = 21
+SW4 = 16
+SW3 = 20
+SW2 = 19
+SW1 = 26
+
+#Twitter API credentials
+import twitter_auth
+consumer_key=twitter_auth.consumer_key
+consumer_secret=twitter_auth.consumer_secret
+access_key=twitter_auth.access_key
+access_secret=twitter_auth.access_secret
+
+def setup_buttons():
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(SW1, GPIO.IN)
+    GPIO.setup(SW2, GPIO.IN)
+    GPIO.setup(SW3, GPIO.IN)
+    GPIO.setup(SW4, GPIO.IN)
+    GPIO.setup(SW5, GPIO.IN)
+
+def wait_for_buttons(buttons):
+
+    while True:
+        buttons_on=map(lambda button: 1 if not GPIO.input(button) else 0, buttons)
+        #if GPIO.input(button) == False:
+        #        return
+        if sum(buttons_on):
+            return buttons_on
+        time.sleep(0.1)
+
+def get_all_tweets(screen_name, nmax):
+	#Twitter only allows access to a users most recent 3240 tweets with this method
+	
+	#authorize twitter, initialize tweepy
+	auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+	auth.set_access_token(access_key, access_secret)
+	api = tweepy.API(auth)
+	
+	#initialize a list to hold all the tweepy Tweets
+	alltweets = []	
+	
+	#make initial request for most recent tweets (200 is the maximum allowed count)
+	new_tweets=api.user_timeline(screen_name=screen_name, count=min(200, nmax))
+
+        return new_tweets
+        
+	#save most recent tweets
+	alltweets.extend(new_tweets)
+	
+	#save the id of the oldest tweet less one
+	oldest = alltweets[-1].id - 1
+	
+	#keep grabbing tweets until there are no tweets left to grab
+	while len(new_tweets) > 0:
+		print "getting tweets before %s" % (oldest)
+		
+		#all subsiquent requests use the max_id param to prevent duplicates
+		new_tweets = api.user_timeline(screen_name = screen_name,count=200,max_id=oldest)
+		
+		#save most recent tweets
+		alltweets.extend(new_tweets)
+		
+		#update the id of the oldest tweet less one
+		oldest = alltweets[-1].id - 1
+		
+		print "...%s tweets downloaded so far" % (len(alltweets))
+	
+	#transform the tweepy tweets into a 2D array that will populate the csv	
+	outtweets = [[tweet.id_str, tweet.created_at, tweet.text.encode("utf-8")] for tweet in alltweets]
+	
+	#write the csv	
+	with open('%s_tweets.csv' % screen_name, 'wb') as f:
+		writer = csv.writer(f)
+		writer.writerow(["id","created_at","text"])
+		writer.writerows(outtweets)
+	
+	pass
+
+
+class Page:
+    def __init__(self):
+
+        pap=papirus.Papirus()
+        
+        self.image=papirus.PapirusImage()
+        self.pagewidth=pap.width
+        self.pageheight=pap.height
+        
+        self.surface = cairo.ImageSurface (cairo.FORMAT_ARGB32, self.pagewidth, self.pageheight)
+        self.cr=cairo.Context(self.surface)
+        #self.cr.set_antialias(cairo.ANTIALIAS_NONE);
+
+        # Clear to white
+        self.cr.rectangle(0, 0, self.pagewidth, self.pageheight) # Rectangle(x0, y0, x1, y1)
+        self.cr.set_source_rgb(1, 1, 1)
+        self.cr.fill()
+        
+    def set_colour(self, colour):
+        if colour=="black":
+            self.cr.set_source_rgb(0, 0, 0)
+        elif colour=="white":
+            self.cr.set_source_rgb(1, 1, 1)
+        else:
+            raise RuntimeError("Unrecognised colour")
+        
+    def text_box(self, text,
+                 font='Sans 7',
+                 x=0,
+                 y=0,
+                 width=None,
+                 height=None,
+                 align=None,
+                 margin=0,
+                 border_thick=1,
+                 padding=1,
+                 text_colour="black",
+                 background_colour=None):
+
+        if width is None: width=self.pagewidth
+        if height is None: height=self.pageheight
+        
+        def background(colour):
+            if colour is not None:
+                self.cr.rectangle(0,
+                                  0,
+                                  width,
+                                  height)
+                self.set_colour(colour)
+                self.cr.fill()
+        def border_line(margin=0, thick=1):
+            self.cr.rectangle(margin+0.5*thick,
+                              margin+0.5*thick,
+                              width-2*margin-thick,
+                              height-2*margin-thick)
+            self.cr.set_line_width(thick)
+            self.cr.set_source_rgb(0, 0, 0)
+            self.cr.stroke()
+
+        self.cr.save()
+        self.cr.translate(x, y)
+            
+        #border_line(margin=0, thick=border_thick)
+        background(background_colour)
+        border_line(margin=margin, thick=border_thick)
+
+        self.cr.save()
+        TOTW=margin+border_thick+padding
+        self.cr.translate(TOTW, TOTW)
+        pangocairo_context = pangocairo.CairoContext(self.cr)
+
+        font_map=pangocairo.cairo_font_map_get_default()
+        #font_map=pangocairo.font_map_new_for_font_type(fonttype)
+        for family in font_map.list_families():
+            for face in family.list_faces():
+                if face.list_sizes() is not None:
+                    print(family.get_name()+" "+face.get_face_name()+" "+str(face.list_sizes()))
+                    
+
+        fo=cairo.FontOptions()
+        fo.set_hint_metrics(cairo.HINT_METRICS_ON)
+        fo.set_hint_style(cairo.HINT_STYLE_FULL)
+        fo.set_antialias(cairo.ANTIALIAS_NONE)
+        pangocairo_context.set_font_options(fo)
+        #pangocairo_context.set_antialias(cairo.ANTIALIAS_NONE)
+        layout = pangocairo_context.create_layout()
+        fontdesc=pango.FontDescription(font)
+        layout.set_width((int(width-TOTW*2)*pango.SCALE))
+        layout.set_font_description(fontdesc)
+        layout.set_text(text)
+        if align is not None:
+            layout.set_alignment(align)
+        self.set_colour(text_colour)
+        pangocairo_context.update_layout(layout)
+        pangocairo_context.show_layout(layout)
+        self.cr.restore()
+
+        self.cr.restore()
+
+    def write(self):
+        filename='/tmp/textim.png'
+        self.surface.write_to_png(filename) # Output to PNG
+        self.image.write(filename)
+
+if __name__ == "__main__":
+
+    user = os.getuid()
+    if user != 0:
+        print "Please run script as root"
+        sys.exit()
+
+    fontname = "Sans 12"
+    #fontname = "VT323"
+    #fontname = "ShareTechMono"
+    #fontname = "Inconsolata"
+
+    setup_buttons()
+
+    feeds={"Daily Trump":"realdonaldtrump",
+           "Trumpton": "trump_ton"}
+    
+    itweet=0
+    ifeed=0
+    while True:
+
+        if itweet==0:
+            # Get most recent 50 tweets
+            tweets=get_all_tweets(feeds[feeds.keys()[ifeed]], 50)
+
+        tweet=tweets[itweet]
+
+        page=Page()
+
+        page.text_box(feeds.keys()[ifeed],
+                      #font="Archivo Black 8",
+                      #font="Alfa Slab One 8",
+                      font="Serif Bold 9",
+                      border_thick=2,
+                      width=96, height=21,
+                      align=pango.ALIGN_CENTER)
+
+        page.text_box(time.strftime("%a %d %b %Y", time.localtime()),
+                      font="Serif Bold 7",
+                      #font="Inconsolata 8",
+                      #font="Source Code Pro 7",
+                      border_thick=2,
+                      padding=3,
+                      x=97, width=103, height=21,
+                      align=pango.ALIGN_CENTER)
+
+        text=tweet.text.encode("utf-8").replace("&amp;", "&")
+
+        page.text_box(text,
+                      #font="Inconsolata 8",
+                      #font="-misc-fixed-medium-r-normal--10-100-75-75-c-60-iso8859-3",
+                      font="fixed 7",
+                      padding=2,
+                      height=73, y=23)
+
+        page.text_box("%d/%d" % (itweet+1, len(tweets)),
+                      font="Inconsolata 8",
+                      #text_colour='white',
+                      background_colour='white',
+                      border_thick=1,
+                      padding=0,
+                      x=147, y=83, width=53, height=13,
+                      align=pango.ALIGN_CENTER)
+
+        page.write()
+
+        buttons_on=wait_for_buttons([SW1, SW4, SW5])
+        
+        if buttons_on[0]:
+            itweet=(itweet-1)%len(tweets)
+        elif buttons_on[1]:
+            ifeed=(ifeed+1)%len(feeds)
+            itweet=0
+        elif buttons_on[2]:
+            itweet=(itweet+1)%len(tweets)
+
