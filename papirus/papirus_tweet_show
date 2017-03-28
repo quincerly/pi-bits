@@ -44,8 +44,8 @@ def wait_for_buttons(buttons):
         #if GPIO.input(button) == False:
         #        return
         if sum(buttons_on):
+            time.sleep(0.1)
             return buttons_on
-        time.sleep(0.1)
 
 def get_all_tweets(screen_name, nmax):
 	#Twitter only allows access to a users most recent 3240 tweets with this method
@@ -95,11 +95,10 @@ def get_all_tweets(screen_name, nmax):
 	
 	pass
 
+pap=papirus.Papirus()
 
 class Page:
     def __init__(self):
-
-        pap=papirus.Papirus()
         
         self.image=papirus.PapirusImage()
         self.pagewidth=pap.width
@@ -109,10 +108,19 @@ class Page:
         self.cr=cairo.Context(self.surface)
         #self.cr.set_antialias(cairo.ANTIALIAS_NONE);
 
+        self.clear()
+        
+    def clear(self, colour='white'):
+        
         # Clear to white
         self.cr.rectangle(0, 0, self.pagewidth, self.pageheight) # Rectangle(x0, y0, x1, y1)
-        self.cr.set_source_rgb(1, 1, 1)
+        self.set_colour(colour)
         self.cr.fill()
+
+    def draw_image(self, pngname, x=0, y=0):
+        ims=cairo.ImageSurface.create_from_png(pngname)
+        self.cr.set_source_surface(ims, x, y)
+        self.cr.paint()
         
     def set_colour(self, colour):
         if colour=="black":
@@ -214,27 +222,33 @@ if __name__ == "__main__":
 
     setup_buttons()
 
-    feeds={"Daily Trump":"realdonaldtrump",
-           "Trumpton": "trump_ton"}
+    page=Page()
+
+    # Image should have size 53x60
+    feeds={"DAILY TRUMP": ("realdonaldtrump", "trump-silhouette.png"),
+           "Trumpton": ("trump_ton", "trumpton.png")}
     
     itweet=0
     ifeed=0
     while True:
 
+        feed_name=feeds.keys()[ifeed]
+        twitter_name, logo=feeds[feed_name]
+        
         if itweet==0:
             # Get most recent 50 tweets
-            tweets=get_all_tweets(feeds[feeds.keys()[ifeed]], 50)
+            tweets=get_all_tweets(twitter_name, 50)
 
         tweet=tweets[itweet]
 
-        page=Page()
-
-        page.text_box(feeds.keys()[ifeed],
+        page.clear()
+        
+        page.text_box(feed_name,
                       #font="Archivo Black 8",
                       #font="Alfa Slab One 8",
-                      font="Serif Bold 9",
+                      font="Serif Bold 8",
                       border_thick=2,
-                      width=96, height=21,
+                      width=98, height=18,
                       align=pango.ALIGN_CENTER)
 
         page.text_box(time.strftime("%a %d %b %Y", time.localtime()),
@@ -243,7 +257,7 @@ if __name__ == "__main__":
                       #font="Source Code Pro 7",
                       border_thick=2,
                       padding=3,
-                      x=97, width=103, height=21,
+                      x=99, width=101, height=18,
                       align=pango.ALIGN_CENTER)
 
         text=tweet.text.encode("utf-8").replace("&amp;", "&")
@@ -253,17 +267,24 @@ if __name__ == "__main__":
                       #font="-misc-fixed-medium-r-normal--10-100-75-75-c-60-iso8859-3",
                       font="fixed 7",
                       padding=2,
-                      height=73, y=23)
+                      width=148,
+                      height=77, y=19)
 
         page.text_box("%d/%d" % (itweet+1, len(tweets)),
                       font="Inconsolata 8",
                       #text_colour='white',
                       background_colour='white',
                       border_thick=1,
-                      padding=0,
-                      x=147, y=83, width=53, height=13,
+                      padding=1,
+                      x=147, y=79, width=53, height=17,
                       align=pango.ALIGN_CENTER)
 
+        page.draw_image(os.path.abspath(os.path.join(os.path.split(sys.argv[0])[0], logo)),
+                        148, 19)
+        page.text_box("",
+                      border_thick=1,
+                      x=147, y=19, width=53, height=61)
+        
         page.write()
 
         buttons_on=wait_for_buttons([SW1, SW4, SW5])
