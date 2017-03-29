@@ -224,76 +224,83 @@ if __name__ == "__main__":
 
     page=Page()
 
-    # Image should have size 53x60
-    feeds={"DAILY TRUMP": ("realdonaldtrump", "trump-silhouette.png"),
-           "Trumpton": ("trump_ton", "trumpton.png")}
-    
-    itweet=0
+    # Image should have size 51x60
+    feeds=[("NIGHTLY TRUMP", "realdonaldtrump", "trump-silhouette.png"),
+           ("Trumpton", "trump_ton", "trumpton.png"),
+           ("Quincerly Trickle", "quincerly", "quincerly.png")]
+
+    itweets=[0]*len(feeds)
+    tweets=[[]]*len(feeds)
     ifeed=0
+    clear=False
     while True:
 
-        feed_name=feeds.keys()[ifeed]
-        twitter_name, logo=feeds[feed_name]
+        feed_name, twitter_name, logo=feeds[ifeed]
         
-        if itweet==0:
+        if itweets[ifeed]==0:
             # Get most recent 50 tweets
-            tweets=get_all_tweets(twitter_name, 50)
-
-        tweet=tweets[itweet]
+            tweets[ifeed]=get_all_tweets(twitter_name, 50)
+            
+        tweet=tweets[ifeed][itweets[ifeed]]
 
         page.clear()
-        
-        page.text_box(feed_name,
-                      #font="Archivo Black 8",
-                      #font="Alfa Slab One 8",
-                      font="Serif Bold 8",
-                      border_thick=2,
-                      width=98, height=18,
-                      align=pango.ALIGN_CENTER)
 
-        page.text_box(time.strftime("%a %d %b %Y", time.localtime()),
-                      font="Serif Bold 7",
-                      #font="Inconsolata 8",
-                      #font="Source Code Pro 7",
-                      border_thick=2,
-                      padding=3,
-                      x=99, width=101, height=18,
-                      align=pango.ALIGN_CENTER)
+        if not clear:
+            page.text_box(feed_name,
+                          #font="Archivo Black 8",
+                          #font="Alfa Slab One 8",
+                          font="Serif Bold 8",
+                          border_thick=2,
+                          width=128, height=18,
+                          align=pango.ALIGN_CENTER)
 
-        text=tweet.text.encode("utf-8").replace("&amp;", "&")
+            #page.text_box(time.strftime("%a %d %b %Y", time.localtime()),
+            page.text_box(time.strftime("%a %d %b", time.localtime()),
+                          font="Serif Bold 7",
+                          #font="Inconsolata 8",
+                          #font="Source Code Pro 7",
+                          border_thick=2,
+                          padding=3,
+                          x=129, width=71, height=18,
+                          align=pango.ALIGN_CENTER)
 
-        page.text_box(text,
-                      #font="Inconsolata 8",
-                      #font="-misc-fixed-medium-r-normal--10-100-75-75-c-60-iso8859-3",
-                      font="fixed 7",
-                      padding=2,
-                      width=148,
-                      height=77, y=19)
+            text=tweet.text.encode("utf-8").replace("&amp;", "&")
 
-        page.text_box("%d/%d" % (itweet+1, len(tweets)),
-                      font="Inconsolata 8",
-                      #text_colour='white',
-                      background_colour='white',
-                      border_thick=1,
-                      padding=1,
-                      x=147, y=79, width=53, height=17,
-                      align=pango.ALIGN_CENTER)
+            page.text_box(text,
+                          #font="Inconsolata 8",
+                          #font="-misc-fixed-medium-r-normal--10-100-75-75-c-60-iso8859-3",
+                          font="fixed 7",
+                          padding=2,
+                          width=148,
+                          height=77, y=19)
 
-        page.draw_image(os.path.abspath(os.path.join(os.path.split(sys.argv[0])[0], logo)),
-                        148, 19)
-        page.text_box("",
-                      border_thick=1,
-                      x=147, y=19, width=53, height=61)
+            page.text_box("%d/%d" % (itweets[ifeed]+1, len(tweets[ifeed])),
+                          font="Inconsolata 8",
+                          #text_colour='white',
+                          background_colour='white',
+                          border_thick=1,
+                          padding=1,
+                          x=147, y=79, width=53, height=17,
+                          align=pango.ALIGN_CENTER)
+
+            page.draw_image(os.path.abspath(os.path.join(os.path.split(sys.argv[0])[0], logo)),
+                            148, 19)
+            page.text_box("",
+                          border_thick=1,
+                          x=147, y=19, width=53, height=61)
         
         page.write()
 
-        buttons_on=wait_for_buttons([SW1, SW4, SW5])
-        
+        buttons_on=wait_for_buttons([SW1, SW2, SW3, SW4, SW5])
+
         if buttons_on[0]:
-            itweet=(itweet-1)%len(tweets)
-        elif buttons_on[1]:
+            itweets[ifeed]=(itweets[ifeed]-1)%len(tweets[ifeed])
+        if buttons_on[1]:
+            itweets[ifeed]=0
+        if buttons_on[2]:
+            clear=not clear
+        elif buttons_on[3]:
             ifeed=(ifeed+1)%len(feeds)
-            itweet=0
-        elif buttons_on[2]:
-            itweet=(itweet+1)%len(tweets)
+        elif buttons_on[4]:
+            itweets[ifeed]=(itweets[ifeed]+1)%len(tweets[ifeed])
 
