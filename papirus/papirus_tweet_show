@@ -227,7 +227,8 @@ if __name__ == "__main__":
     # Image should have size 51x60
     feeds=[("NIGHTLY TRUMP", "realdonaldtrump", "trump-silhouette.png"),
            ("Trumpton", "trump_ton", "trumpton.png"),
-           ("Quincerly Trickle", "quincerly", "quincerly.png")]
+           ("Quincerly Trickle", "quincerly", "quincerly.png"),
+           ("Britain Elects", "britainelects", "britainelects.png")]
 
     itweets=[0]*len(feeds)
     tweets=[[]]*len(feeds)
